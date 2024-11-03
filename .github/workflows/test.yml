@@ -34,8 +34,10 @@ jobs:
           postgresql user: 'postgres'
           postgresql password: 'postgres'
 
-      - name: Set up MongoDB
-        uses: supercharge/mongodb-github-action@1.11.0
+      - name: Set up OpenSearch
+        uses: ankane/setup-opensearch@v1
+        with:
+          opensearch-version: 2
 
       - name: Set up Scylla
         run: |
@@ -74,25 +76,25 @@ jobs:
       - name: Unit tests pydantic v2
         if: ${{ matrix.pydantic_v2 == 'true' }}
         run: |
-          poetry run pytest tests  --ignore=tests/ext --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST}
+          poetry run pytest tests  --ignore=tests/ext --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST} --opensearch-dsn="${OPENSEARCH_HOME}"
 
       - name: Unit tests
         if: ${{ matrix.pydantic_v2 == 'false' }}
         run: |
-          poetry run pytest tests -m "not gino" --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST}
+          poetry run pytest tests -m "not gino" --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST} --opensearch-dsn="${OPENSEARCH_HOME}"
 
       - name: Unit tests SQLAlchemy 2.0
         if: ${{ matrix.pydantic_v2 == 'false' }}
         run: |
           poetry run pip install -U "sqlalchemy>2.0.0"
-          poetry run pytest tests -m "sqlalchemy20" --cov-append --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST}
+          poetry run pytest tests -m "sqlalchemy20" --cov-append --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST} --opensearch-dsn="${OPENSEARCH_HOME}"
 
       # TODO: remove it when ormar will support pydantic v2
       - name: Unit tests Odmantic
         if: ${{ matrix.pydantic_v2 == 'true' }}
         run: |
           poetry run pip install -U odmantic "pydantic<2.7"
-          poetry run pytest tests -m "odmantic" --cov-append --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST}
+          poetry run pytest tests -m "odmantic" --cov-append --cov-report=xml --cassandra-dsn=${CQL_TEST_HOST} --opensearch-dsn="${OPENSEARCH_HOME}"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
