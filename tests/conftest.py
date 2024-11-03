@@ -1,3 +1,5 @@
+import os
+from opensearchpy import OpenSearch, AsyncOpenSearch
 from . import patch  # noqa  # isort: skip  # DO NOT REMOVE THIS LINE.
 from asyncio import new_event_loop
 from itertools import count
@@ -37,6 +39,11 @@ def pytest_addoption(parser: Parser):
         "--cassandra-dsn",
         type=str,
         required=True,
+    )
+    parser.addoption(
+        "--opensearch-dsn",
+        type=str,
+        required=False,
     )
     parser.addoption(
         "--unit-tests",
@@ -222,6 +229,10 @@ def postgres_url(request: FixtureRequest) -> str:
 def cassandra_address(request: FixtureRequest) -> str:
     return request.config.getoption("--cassandra-dsn")
 
+@fixture(scope="session")
+def opensearch_address(request: FixtureRequest) -> str:
+    return request.config.getoption("--opensearch-dsn", default=os.getenv("OPENSEARCH_HOME", "http://localhost:9200"))
+
 
 @fixture(scope="session")
 def sqlite_file() -> str:
@@ -270,3 +281,31 @@ def pytest_collection_modifyitems(items: List[Function]):
 async def client(app: FastAPI):
     async with LifespanManager(app), AsyncClient(app=app, base_url="http://testserver", timeout=60) as c:
         yield c
+
+@fixture(scope="session")
+def opensearch_session(opensearch_host: str, is_unit_tests_run: bool, is_sql_tests_run: bool, raw_data: RawData):
+    if is_unit_tests_run or is_sql_tests_run:
+        return
+
+    with OpenSearch([opensearch_host], use_ssl=False, verify_certs=False) as opensearch_client:
+        opensearch_client: OpenSearch = opensearch_client # Just for type hinting
+        opensearch_client.indices.delete("idx", ignore_unavailable=True)
+        opensearch_client.indices.create("idx")
+        for doc in raw_data:
+            opensearch_client.index("idx", doc, doc.get("id"))
+        yield opensearch_client
+
+
+@fixture(scope="session")
+async def opensearch_async_session(opensearch_host: str, is_unit_tests_run: bool, is_sql_tests_run: bool):
+    if is_unit_tests_run or is_sql_tests_run:
+        return
+
+    with AsyncOpenSearch([opensearch_host], use_ssl=False, verify_certs=False) as opensearch_client:
+        opensearch_client: AsyncOpenSearch = opensearch_client  # Just for type hinting
+        await opensearch_client.indices.delete("idx", ignore_unavailable=True)
+        await opensearch_client.indices.create("idx")
+        for doc in raw_data:
+            await opensearch_client.index("idx", doc, doc.get("id"))
+        yield opensearch_client
+
